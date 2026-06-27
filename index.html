@@ -35,9 +35,9 @@
     .count-label { font-size: 12px; color: var(--muted); margin-bottom: 14px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
     .recipe-list { display: flex; flex-direction: column; gap: 12px; }
 
-    .recipe-card { background: #fff; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; transition: box-shadow 0.15s; }
+    .recipe-card { background: #fff; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; transition: box-shadow 0.15s; cursor: pointer; }
     .recipe-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
-    .card-thumb { width: 100px; min-height: 90px; background: var(--tag-bg); flex-shrink: 0; position: relative; overflow: hidden; cursor: pointer; }
+    .card-thumb { width: 100px; min-height: 90px; background: var(--tag-bg); flex-shrink: 0; position: relative; overflow: hidden; }
     .card-thumb img { width: 100%; height: 100%; object-fit: cover; }
     .thumb-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 30px; }
     .play-badge { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.65); color: #fff; border-radius: 4px; width: 22px; height: 16px; display: flex; align-items: center; justify-content: center; font-size: 8px; }
@@ -56,11 +56,27 @@
     .loading .spinner { font-size: 32px; margin-bottom: 12px; animation: spin 1s linear infinite; display: inline-block; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* MODALS */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; display: none; align-items: flex-end; justify-content: center; }
     .modal-overlay.open { display: flex; }
     .modal { background: var(--surface); border-radius: 20px 20px 0 0; padding: 24px 20px 40px; width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; }
     .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 20px; }
     .modal h2 { font-family: 'Lora', serif; font-size: 20px; font-weight: 600; margin-bottom: 20px; }
+
+    /* DETAIL MODAL */
+    .detail-thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 12px; margin-bottom: 16px; display: block; }
+    .detail-thumb-placeholder { width: 100%; aspect-ratio: 16/9; background: var(--tag-bg); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 48px; margin-bottom: 16px; }
+    .detail-title { font-family: 'Lora', serif; font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+    .detail-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+    .detail-watch-btn { width: 100%; padding: 12px; background: #ff0000; color: #fff; border: none; border-radius: 10px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 20px; }
+    .detail-section { margin-bottom: 20px; }
+    .detail-section h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 10px; }
+    .detail-section p { font-size: 14px; line-height: 1.8; color: var(--text); white-space: pre-wrap; }
+    .detail-ingredients { display: flex; flex-wrap: wrap; gap: 8px; }
+    .detail-ingredient { background: var(--tag-bg); padding: 6px 12px; border-radius: 20px; font-size: 13px; color: var(--text); }
+    .detail-footer { display: flex; gap: 10px; margin-top: 20px; }
+    .btn-danger { flex: 1; background: none; border: 1.5px solid #e8d5d5; color: #c84b2f; border-radius: 10px; padding: 13px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; }
+    .btn-close { flex: 1; background: var(--tag-bg); border: none; border-radius: 10px; padding: 13px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; color: var(--muted); cursor: pointer; }
 
     .form-group { margin-bottom: 14px; }
     label { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
@@ -118,7 +134,7 @@
       <span class="logo-text">Recipe Book</span>
       <span class="logo-sub">by family</span>
     </div>
-    <button class="add-btn" onclick="openModal()">+ Add Recipe</button>
+    <button class="add-btn" onclick="openModal('add')">+ Add Recipe</button>
   </div>
   <div class="search-wrap">
     <span class="search-icon">🔍</span>
@@ -134,7 +150,8 @@
   </div>
 </main>
 
-<div class="modal-overlay" id="modalOverlay">
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="addOverlay">
   <div class="modal">
     <div class="modal-handle"></div>
     <h2>Add a Recipe</h2>
@@ -218,9 +235,17 @@
     </div>
 
     <div class="form-actions">
-      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-secondary" onclick="closeModal('add')">Cancel</button>
       <button class="btn-primary" id="saveBtn" onclick="saveRecipe()">Save Recipe</button>
     </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="detailOverlay">
+  <div class="modal" id="detailModal">
+    <div class="modal-handle"></div>
+    <div id="detailContent"></div>
   </div>
 </div>
 
@@ -258,7 +283,7 @@
   var photoMime = "image/jpeg";
 
   function getYTId(url) {
-    var m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+    var m = (url||"").match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
     return m ? m[1] : null;
   }
 
@@ -298,25 +323,21 @@
     }
 
     list.innerHTML = filtered.map(function(r) {
-      var vid = r.ytId || (r.ytUrl ? getYTId(r.ytUrl) : null);
+      var vid = r.ytId || getYTId(r.ytUrl);
       var thumb = vid ? '<img src="https://img.youtube.com/vi/' + vid + '/hqdefault.jpg" alt="' + esc(r.name) + '"/>' : '<div class="thumb-placeholder">🍽️</div>';
       var playBadge = vid ? '<div class="play-badge">▶</div>' : '';
-      var openUrl = r.ytUrl || '#';
-      var snippet = r.recipe ? r.recipe.substring(0, 70) + (r.recipe.length > 70 ? '…' : '') : null;
-      return '<div class="recipe-card">' +
-        '<div class="card-thumb" ' + (vid ? 'onclick="window.open(\'' + esc(openUrl) + '\',\'_blank\')"' : '') + '>' + thumb + playBadge + '</div>' +
+      return '<div class="recipe-card" onclick="openDetail(\'' + r._id + '\')">' +
+        '<div class="card-thumb">' + thumb + playBadge + '</div>' +
         '<div class="card-body">' +
           '<div class="card-name">' + esc(r.name) + '</div>' +
           (r.ingredients ? '<div class="card-meta">' + esc(r.ingredients) + '</div>' : '') +
-          (snippet ? '<div class="card-meta" style="color:#4a6fa5;font-style:italic">📝 ' + esc(snippet) + '</div>' : '') +
           '<div class="card-footer">' +
             '<div class="card-tags">' +
               (r.cuisine ? '<span class="card-tag cuisine">' + esc(r.cuisine) + '</span>' : '') +
               (r.category ? '<span class="card-tag">' + esc(r.category) + '</span>' : '') +
             '</div>' +
             '<div class="card-actions">' +
-              (vid ? '<button class="icon-btn" onclick="window.open(\'' + esc(openUrl) + '\',\'_blank\')">▶</button>' : '') +
-              '<button class="icon-btn" onclick="deleteRecipe(\'' + r._id + '\')">🗑</button>' +
+              '<button class="icon-btn" onclick="event.stopPropagation();deleteRecipe(\'' + r._id + '\')">🗑</button>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -324,12 +345,40 @@
     }).join("");
   }
 
+  // ── DETAIL VIEW ──
+  window.openDetail = function(id) {
+    var r = (window._allRecipes || []).find(function(x) { return x._id === id; });
+    if (!r) return;
+    var vid = r.ytId || getYTId(r.ytUrl);
+    var ingList = r.ingredients ? r.ingredients.split(",").map(function(i) {
+      return '<span class="detail-ingredient">' + esc(i.trim()) + '</span>';
+    }).join("") : "";
+
+    document.getElementById("detailContent").innerHTML =
+      (vid ? '<img class="detail-thumb" src="https://img.youtube.com/vi/' + vid + '/hqdefault.jpg" alt="' + esc(r.name) + '"/>' : '<div class="detail-thumb-placeholder">🍽️</div>') +
+      '<div class="detail-title">' + esc(r.name) + '</div>' +
+      '<div class="detail-tags">' +
+        (r.cuisine ? '<span class="card-tag cuisine">' + esc(r.cuisine) + '</span>' : '') +
+        (r.category ? '<span class="card-tag">' + esc(r.category) + '</span>' : '') +
+      '</div>' +
+      (vid ? '<button class="detail-watch-btn" onclick="window.open(\'' + esc(r.ytUrl) + '\',\'_blank\')">▶ Watch on YouTube</button>' : '') +
+      (ingList ? '<div class="detail-section"><h3>Ingredients</h3><div class="detail-ingredients">' + ingList + '</div></div>' : '') +
+      (r.recipe ? '<div class="detail-section"><h3>Steps</h3><p>' + esc(r.recipe) + '</p></div>' : '') +
+      (!r.recipe && !ingList ? '<div class="detail-section"><p style="color:var(--muted);font-size:14px">No details saved for this recipe.</p></div>' : '') +
+      '<div class="detail-footer">' +
+        '<button class="btn-danger" onclick="deleteRecipe(\'' + r._id + '\');closeModal(\'detail\')">🗑 Delete</button>' +
+        '<button class="btn-close" onclick="closeModal(\'detail\')">Close</button>' +
+      '</div>';
+
+    openModal('detail');
+  };
+
   window.deleteRecipe = function(id) {
     if (!confirm("Delete this recipe?")) return;
     window._deleteFromFirebase(id).catch(function(e) { showToast("Error: " + e.message); });
   };
 
-  // ── GEMINI CALL ──
+  // ── GEMINI ──
   function callGemini(parts) {
     return fetch(WORKER_URL, {
       method: "POST",
@@ -339,16 +388,40 @@
   }
 
   function parseGeminiJSON(data) {
-    var text = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] ? data.candidates[0].content.parts[0].text : "{}";
-    return JSON.parse(text.replace(/```json|```/g, "").trim());
+    try {
+      // navigate Gemini response structure
+      var text = data.candidates[0].content.parts[0].text;
+      // strip markdown code fences if present
+      text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+      return JSON.parse(text);
+    } catch(e) {
+      console.error("Gemini parse error", e, data);
+      return {};
+    }
   }
 
   function fillForm(parsed) {
     if (parsed.name) document.getElementById("fName").value = parsed.name;
     if (parsed.ingredients) document.getElementById("fIngredients").value = parsed.ingredients;
     if (parsed.recipe) document.getElementById("fRecipe").value = parsed.recipe;
-    if (parsed.category) document.getElementById("fCategory").value = parsed.category;
-    if (parsed.cuisine) document.getElementById("fCuisine").value = parsed.cuisine;
+    // match select options loosely
+    if (parsed.category) setSelect("fCategory", parsed.category);
+    if (parsed.cuisine) setSelect("fCuisine", parsed.cuisine);
+  }
+
+  function setSelect(id, value) {
+    var sel = document.getElementById(id);
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value.toLowerCase() === value.toLowerCase()) {
+        sel.selectedIndex = i; return;
+      }
+    }
+    // partial match
+    for (var j = 0; j < sel.options.length; j++) {
+      if (sel.options[j].value.toLowerCase().includes(value.toLowerCase()) || value.toLowerCase().includes(sel.options[j].value.toLowerCase())) {
+        sel.selectedIndex = j; return;
+      }
+    }
   }
 
   // ── YOUTUBE AUTOFILL ──
@@ -372,14 +445,16 @@
     fetch("https://www.youtube.com/oembed?url=https://youtu.be/" + vid + "&format=json")
       .then(function(r) { return r.json(); })
       .then(function(yt) {
-        return callGemini([{ text: "YouTube recipe video title: \"" + (yt.title||"") + "\". Respond ONLY with JSON (no markdown): {\"name\": \"\", \"ingredients\": \"\", \"category\": \"Chicken|Vegetarian|Dal / Lentils|Rice / Biryani|Bread / Roti|Dessert|Snack|Soup|Seafood|Other\", \"cuisine\": \"Indian|Italian|Chinese|Mexican|Thai|Middle Eastern|Continental|Other\"}" }]);
+        return callGemini([{ text: 'YouTube recipe video title: "' + (yt.title||"") + '". Respond ONLY with valid JSON, no markdown fences: {"name":"","ingredients":"comma separated list","category":"Chicken or Vegetarian or Dal / Lentils or Rice / Biryani or Bread / Roti or Dessert or Snack or Soup or Seafood or Other","cuisine":"Indian or Italian or Chinese or Mexican or Thai or Middle Eastern or Continental or Other"}' }]);
       })
       .then(function(data) {
-        fillForm(parseGeminiJSON(data));
+        var parsed = parseGeminiJSON(data);
+        if (Object.keys(parsed).length === 0) { status.textContent = "❌ Couldn't parse response. Fill manually."; return; }
+        fillForm(parsed);
         status.textContent = "✅ Fields filled — review and save!";
         showToast("Auto-filled! 🎉");
       })
-      .catch(function(e) { status.textContent = "❌ Couldn't auto-fill. Fill in manually."; console.error(e); })
+      .catch(function(e) { status.textContent = "❌ Couldn't auto-fill. Fill manually."; console.error(e); })
       .finally(function() { btn.disabled = false; btn.textContent = "✨ Auto-fill"; });
   };
 
@@ -406,10 +481,12 @@
 
     callGemini([
       { inline_data: { mime_type: photoMime, data: photoBase64 } },
-      { text: "This is a photo of a recipe. Respond ONLY with JSON (no markdown): {\"name\": \"\", \"ingredients\": \"\", \"recipe\": \"\", \"category\": \"Chicken|Vegetarian|Dal / Lentils|Rice / Biryani|Bread / Roti|Dessert|Snack|Soup|Seafood|Other\", \"cuisine\": \"Indian|Italian|Chinese|Mexican|Thai|Middle Eastern|Continental|Other\"}" }
+      { text: 'This is a photo of a recipe. Respond ONLY with valid JSON, no markdown fences: {"name":"","ingredients":"comma separated list","recipe":"full steps","category":"Chicken or Vegetarian or Dal / Lentils or Rice / Biryani or Bread / Roti or Dessert or Snack or Soup or Seafood or Other","cuisine":"Indian or Italian or Chinese or Mexican or Thai or Middle Eastern or Continental or Other"}' }
     ])
     .then(function(data) {
-      fillForm(parseGeminiJSON(data));
+      var parsed = parseGeminiJSON(data);
+      if (Object.keys(parsed).length === 0) { status.textContent = "❌ Couldn't read photo. Try a clearer image."; return; }
+      fillForm(parsed);
       status.textContent = "✅ Recipe extracted — review and save!";
       showToast("Extracted from photo! 📷🎉");
     })
@@ -429,8 +506,8 @@
     if (!window._saveToFirebase) { showToast("Still connecting…"); return; }
     var btn = document.getElementById("saveBtn");
     btn.disabled = true; btn.textContent = "Saving…";
-    window._saveToFirebase({ name, ytUrl: ytUrl||null, ytId: ytUrl ? getYTId(ytUrl) : null, ingredients: ingredients||null, recipe: recipe||null, category: category||null, cuisine: cuisine||null, addedAt: Date.now() })
-      .then(function() { closeModal(); showToast("Recipe saved! 🎉"); resetForm(); })
+    window._saveToFirebase({ name: name, ytUrl: ytUrl||null, ytId: ytUrl ? getYTId(ytUrl) : null, ingredients: ingredients||null, recipe: recipe||null, category: category||null, cuisine: cuisine||null, addedAt: Date.now() })
+      .then(function() { closeModal('add'); showToast("Recipe saved! 🎉"); resetForm(); })
       .catch(function(e) { showToast("Error: " + e.message); })
       .finally(function() { btn.disabled = false; btn.textContent = "Save Recipe"; });
   };
@@ -446,9 +523,11 @@
     photoBase64 = null;
   }
 
-  window.openModal = function() { document.getElementById("modalOverlay").classList.add("open"); };
-  window.closeModal = function() { document.getElementById("modalOverlay").classList.remove("open"); };
-  document.getElementById("modalOverlay").addEventListener("click", function(e) { if (e.target === this) closeModal(); });
+  window.openModal = function(type) { document.getElementById(type + "Overlay").classList.add("open"); };
+  window.closeModal = function(type) { document.getElementById(type + "Overlay").classList.remove("open"); };
+
+  document.getElementById("addOverlay").addEventListener("click", function(e) { if (e.target === this) closeModal('add'); });
+  document.getElementById("detailOverlay").addEventListener("click", function(e) { if (e.target === this) closeModal('detail'); });
 
   function showToast(msg) {
     var t = document.getElementById("toast");
