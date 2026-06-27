@@ -83,7 +83,7 @@
     .photo-area .photo-icon { font-size: 24px; margin-bottom: 6px; }
     .photo-area p { font-size: 13px; color: var(--muted); }
     .photo-area p strong { color: var(--accent); }
-    .photo-preview-wrap { margin-top: 10px; position: relative; display: none; }
+    .photo-preview-wrap { margin-top: 10px; display: none; }
     .photo-preview-wrap.show { display: block; }
     .photo-preview-wrap img { width: 100%; border-radius: 8px; max-height: 160px; object-fit: cover; }
     .photo-extract-btn { width: 100%; margin-top: 8px; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; }
@@ -134,7 +134,6 @@
   </div>
 </main>
 
-<!-- MODAL -->
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -142,11 +141,11 @@
 
     <div class="form-group">
       <label>📷 Scan from photo <span>(cookbook, handwritten, screenshot)</span></label>
-      <div class="photo-area" id="photoArea">
+      <div class="photo-area">
         <input type="file" accept="image/*" id="photoInput" onchange="onPhotoSelected(event)"/>
         <div class="photo-icon">📸</div>
         <p><strong>Tap to upload</strong> a photo of a recipe</p>
-        <p>Claude will read it and fill the form automatically</p>
+        <p>Gemini will read it and fill the form automatically</p>
       </div>
       <div class="photo-preview-wrap" id="photoPreviewWrap">
         <img id="photoPreviewImg" src="" alt="recipe photo"/>
@@ -232,40 +231,31 @@
   import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
   const FIREBASE_URL = "https://family-recipe-book-4765a-default-rtdb.asia-southeast1.firebasedatabase.app";
-  const DB_PATH = "recipes";
-
   const app = initializeApp({ databaseURL: FIREBASE_URL });
   const db = getDatabase(app);
-  const recipesRef = ref(db, DB_PATH);
+  const recipesRef = ref(db, "recipes");
 
-  window._fbReady = { db, ref, push, onValue, remove, recipesRef };
-
-  let allRecipes = [];
+  window._allRecipes = [];
 
   onValue(recipesRef, function(snap) {
-    allRecipes = [];
+    window._allRecipes = [];
     snap.forEach(function(child) {
-      allRecipes.push(Object.assign({ _id: child.key }, child.val()));
+      window._allRecipes.push(Object.assign({ _id: child.key }, child.val()));
     });
-    allRecipes.reverse();
-    window._allRecipes = allRecipes;
+    window._allRecipes.reverse();
     buildChips();
     renderRecipes();
   });
 
-  window._saveToFirebase = async function(data) {
-    return push(recipesRef, data);
-  };
-
-  window._deleteFromFirebase = async function(id) {
-    const itemRef = ref(db, DB_PATH + "/" + id);
-    return remove(itemRef);
-  };
+  window._saveToFirebase = function(data) { return push(recipesRef, data); };
+  window._deleteFromFirebase = function(id) { return remove(ref(db, "recipes/" + id)); };
 </script>
 
 <script>
+  var WORKER_URL = "https://recipe-ai-proxy.guptashikhar999.workers.dev";
   var activeCuisine = "All";
   var photoBase64 = null;
+  var photoMime = "image/jpeg";
 
   function getYTId(url) {
     var m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
@@ -273,9 +263,8 @@
   }
 
   function buildChips() {
-    var recipes = window._allRecipes || [];
     var cuisines = ["All"];
-    recipes.forEach(function(r) { if (r.cuisine && cuisines.indexOf(r.cuisine) === -1) cuisines.push(r.cuisine); });
+    (window._allRecipes || []).forEach(function(r) { if (r.cuisine && cuisines.indexOf(r.cuisine) === -1) cuisines.push(r.cuisine); });
     document.getElementById("chipsWrap").innerHTML = cuisines.map(function(c) {
       return '<button class="chip' + (c === activeCuisine ? ' active' : '') + '" onclick="selectCuisine(\'' + c + '\')">' + c + '</button>';
     }).join("");
@@ -337,9 +326,32 @@
 
   window.deleteRecipe = function(id) {
     if (!confirm("Delete this recipe?")) return;
-    if (window._deleteFromFirebase) window._deleteFromFirebase(id).catch(function(e) { showToast("Error: " + e.message); });
+    window._deleteFromFirebase(id).catch(function(e) { showToast("Error: " + e.message); });
   };
 
+  // ── GEMINI CALL ──
+  function callGemini(parts) {
+    return fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: parts }] })
+    }).then(function(r) { return r.json(); });
+  }
+
+  function parseGeminiJSON(data) {
+    var text = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] ? data.candidates[0].content.parts[0].text : "{}";
+    return JSON.parse(text.replace(/```json|```/g, "").trim());
+  }
+
+  function fillForm(parsed) {
+    if (parsed.name) document.getElementById("fName").value = parsed.name;
+    if (parsed.ingredients) document.getElementById("fIngredients").value = parsed.ingredients;
+    if (parsed.recipe) document.getElementById("fRecipe").value = parsed.recipe;
+    if (parsed.category) document.getElementById("fCategory").value = parsed.category;
+    if (parsed.cuisine) document.getElementById("fCuisine").value = parsed.cuisine;
+  }
+
+  // ── YOUTUBE AUTOFILL ──
   window.onYtInput = function() {
     var url = document.getElementById("fUrl").value.trim();
     var vid = getYTId(url);
@@ -355,28 +367,15 @@
     var btn = document.getElementById("autofillBtn");
     var status = document.getElementById("ytStatus");
     btn.disabled = true; btn.textContent = "Reading…";
-    status.textContent = "✨ Claude is reading the video details…"; status.classList.add("show");
+    status.textContent = "✨ Reading video details…"; status.classList.add("show");
 
     fetch("https://www.youtube.com/oembed?url=https://youtu.be/" + vid + "&format=json")
       .then(function(r) { return r.json(); })
       .then(function(yt) {
-        return fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-6", max_tokens: 1000,
-            messages: [{ role: "user", content: "YouTube recipe video title: \"" + (yt.title||"") + "\". Extract and respond ONLY with JSON (no markdown, no backticks): {name, ingredients (comma-separated), category (Chicken/Vegetarian/Dal - Lentils/Rice - Biryani/Bread - Roti/Dessert/Snack/Soup/Seafood/Other), cuisine (Indian/Italian/Chinese/Mexican/Thai/Middle Eastern/Continental/Other)}" }]
-          })
-        });
+        return callGemini([{ text: "YouTube recipe video title: \"" + (yt.title||"") + "\". Respond ONLY with JSON (no markdown): {\"name\": \"\", \"ingredients\": \"\", \"category\": \"Chicken|Vegetarian|Dal / Lentils|Rice / Biryani|Bread / Roti|Dessert|Snack|Soup|Seafood|Other\", \"cuisine\": \"Indian|Italian|Chinese|Mexican|Thai|Middle Eastern|Continental|Other\"}" }]);
       })
-      .then(function(r) { return r.json(); })
       .then(function(data) {
-        var text = (data.content && data.content[0]) ? data.content[0].text : "{}";
-        var parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
-        if (parsed.name) document.getElementById("fName").value = parsed.name;
-        if (parsed.ingredients) document.getElementById("fIngredients").value = parsed.ingredients;
-        if (parsed.category) document.getElementById("fCategory").value = parsed.category;
-        if (parsed.cuisine) document.getElementById("fCuisine").value = parsed.cuisine;
+        fillForm(parseGeminiJSON(data));
         status.textContent = "✅ Fields filled — review and save!";
         showToast("Auto-filled! 🎉");
       })
@@ -384,9 +383,11 @@
       .finally(function() { btn.disabled = false; btn.textContent = "✨ Auto-fill"; });
   };
 
+  // ── PHOTO SCAN ──
   window.onPhotoSelected = function(e) {
     var file = e.target.files[0];
     if (!file) return;
+    photoMime = file.type || "image/jpeg";
     var reader = new FileReader();
     reader.onload = function(ev) {
       photoBase64 = ev.target.result.split(",")[1];
@@ -401,28 +402,14 @@
     var btn = document.getElementById("extractBtn");
     var status = document.getElementById("photoStatus");
     btn.disabled = true; btn.textContent = "✨ Reading recipe…";
-    status.textContent = "✨ Claude is reading the photo…"; status.classList.add("show");
+    status.textContent = "✨ Reading the photo…"; status.classList.add("show");
 
-    fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6", max_tokens: 1000,
-        messages: [{ role: "user", content: [
-          { type: "image", source: { type: "base64", media_type: "image/jpeg", data: photoBase64 } },
-          { type: "text", text: "This is a photo of a recipe. Respond ONLY with JSON (no markdown, no backticks): {name, ingredients (comma-separated), recipe (full steps as string), category (Chicken/Vegetarian/Dal - Lentils/Rice - Biryani/Bread - Roti/Dessert/Snack/Soup/Seafood/Other), cuisine (Indian/Italian/Chinese/Mexican/Thai/Middle Eastern/Continental/Other)}" }
-        ]}]
-      })
-    })
-    .then(function(r) { return r.json(); })
+    callGemini([
+      { inline_data: { mime_type: photoMime, data: photoBase64 } },
+      { text: "This is a photo of a recipe. Respond ONLY with JSON (no markdown): {\"name\": \"\", \"ingredients\": \"\", \"recipe\": \"\", \"category\": \"Chicken|Vegetarian|Dal / Lentils|Rice / Biryani|Bread / Roti|Dessert|Snack|Soup|Seafood|Other\", \"cuisine\": \"Indian|Italian|Chinese|Mexican|Thai|Middle Eastern|Continental|Other\"}" }
+    ])
     .then(function(data) {
-      var text = (data.content && data.content[0]) ? data.content[0].text : "{}";
-      var parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
-      if (parsed.name) document.getElementById("fName").value = parsed.name;
-      if (parsed.ingredients) document.getElementById("fIngredients").value = parsed.ingredients;
-      if (parsed.recipe) document.getElementById("fRecipe").value = parsed.recipe;
-      if (parsed.category) document.getElementById("fCategory").value = parsed.category;
-      if (parsed.cuisine) document.getElementById("fCuisine").value = parsed.cuisine;
+      fillForm(parseGeminiJSON(data));
       status.textContent = "✅ Recipe extracted — review and save!";
       showToast("Extracted from photo! 📷🎉");
     })
@@ -430,6 +417,7 @@
     .finally(function() { btn.disabled = false; btn.textContent = "✨ Extract recipe from photo"; });
   };
 
+  // ── SAVE ──
   window.saveRecipe = function() {
     var name = document.getElementById("fName").value.trim();
     var ytUrl = document.getElementById("fUrl").value.trim();
@@ -438,29 +426,13 @@
     var category = document.getElementById("fCategory").value;
     var cuisine = document.getElementById("fCuisine").value;
     if (!name) { showToast("Add a recipe name first!"); return; }
-    if (!window._saveToFirebase) { showToast("Still connecting to Firebase…"); return; }
-
+    if (!window._saveToFirebase) { showToast("Still connecting…"); return; }
     var btn = document.getElementById("saveBtn");
     btn.disabled = true; btn.textContent = "Saving…";
-
-    window._saveToFirebase({
-      name: name,
-      ytUrl: ytUrl || null,
-      ytId: ytUrl ? getYTId(ytUrl) : null,
-      ingredients: ingredients || null,
-      recipe: recipe || null,
-      category: category || null,
-      cuisine: cuisine || null,
-      addedAt: Date.now()
-    }).then(function() {
-      closeModal();
-      showToast("Recipe saved! 🎉");
-      resetForm();
-    }).catch(function(e) {
-      showToast("Error saving: " + e.message);
-    }).finally(function() {
-      btn.disabled = false; btn.textContent = "Save Recipe";
-    });
+    window._saveToFirebase({ name, ytUrl: ytUrl||null, ytId: ytUrl ? getYTId(ytUrl) : null, ingredients: ingredients||null, recipe: recipe||null, category: category||null, cuisine: cuisine||null, addedAt: Date.now() })
+      .then(function() { closeModal(); showToast("Recipe saved! 🎉"); resetForm(); })
+      .catch(function(e) { showToast("Error: " + e.message); })
+      .finally(function() { btn.disabled = false; btn.textContent = "Save Recipe"; });
   };
 
   function resetForm() {
@@ -477,7 +449,6 @@
   window.openModal = function() { document.getElementById("modalOverlay").classList.add("open"); };
   window.closeModal = function() { document.getElementById("modalOverlay").classList.remove("open"); };
   document.getElementById("modalOverlay").addEventListener("click", function(e) { if (e.target === this) closeModal(); });
-  document.getElementById("searchInput").addEventListener("input", renderRecipes);
 
   function showToast(msg) {
     var t = document.getElementById("toast");
