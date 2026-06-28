@@ -445,7 +445,7 @@
     fetch("https://www.youtube.com/oembed?url=https://youtu.be/" + vid + "&format=json")
       .then(function(r) { return r.json(); })
       .then(function(yt) {
-        return callGemini([{ text: 'YouTube recipe video title: "' + (yt.title||"") + '". Respond ONLY with valid JSON, no markdown fences: {"name":"","ingredients":"comma separated list","category":"Chicken or Vegetarian or Dal / Lentils or Rice / Biryani or Bread / Roti or Dessert or Snack or Soup or Seafood or Other","cuisine":"Indian or Italian or Chinese or Mexican or Thai or Middle Eastern or Continental or Other"}' }]);
+        return callGemini([{ text: 'You are a professional chef. Based on this YouTube recipe video title: "' + (yt.title||"") + '", provide accurate details. Think about what ingredients are typically used in this dish. Respond ONLY with valid JSON, no markdown, no extra text: {"name":"clean recipe name only","ingredients":"comprehensive comma separated ingredients list including spices and garnishes","category":"pick one: Chicken or Vegetarian or Dal / Lentils or Rice / Biryani or Bread / Roti or Dessert or Snack or Soup or Seafood or Other","cuisine":"pick one: Indian or Italian or Chinese or Mexican or Thai or Middle Eastern or Continental or Other"}' }]);
       })
       .then(function(data) {
         var parsed = parseGeminiJSON(data);
@@ -481,7 +481,7 @@
 
     callGemini([
       { inline_data: { mime_type: photoMime, data: photoBase64 } },
-      { text: 'This is a photo of a recipe. Respond ONLY with valid JSON, no markdown fences: {"name":"","ingredients":"comma separated list","recipe":"full steps","category":"Chicken or Vegetarian or Dal / Lentils or Rice / Biryani or Bread / Roti or Dessert or Snack or Soup or Seafood or Other","cuisine":"Indian or Italian or Chinese or Mexican or Thai or Middle Eastern or Continental or Other"}' }
+      { text: 'This is a photo of a recipe (could be a cookbook page, handwritten note, or screenshot). Read ALL the text carefully and extract every detail. Respond ONLY with valid JSON, no markdown, no extra text: {"name":"exact recipe name from the photo","ingredients":"every ingredient exactly as written, comma separated","recipe":"all steps exactly as written, each step on a new line","category":"pick one: Chicken or Vegetarian or Dal / Lentils or Rice / Biryani or Bread / Roti or Dessert or Snack or Soup or Seafood or Other","cuisine":"pick one: Indian or Italian or Chinese or Mexican or Thai or Middle Eastern or Continental or Other"}' }
     ])
     .then(function(data) {
       var parsed = parseGeminiJSON(data);
