@@ -321,7 +321,7 @@
   });
   const db = getDatabase(app);
   const auth = getAuth(app);
-  const recipesRef = ref(db, "recipes");
+
 
   window._allRecipes = [];
   window._currentUser = null;
@@ -333,6 +333,10 @@
       document.getElementById("authScreen").style.display = "none";
       document.getElementById("app").style.display = "block";
       document.getElementById("userName").textContent = user.displayName || user.email.split("@")[0];
+
+      const recipesRef = ref(db, "recipes/" + user.uid);
+      window._saveToFirebase = function(data) { return push(recipesRef, data); };
+      window._deleteFromFirebase = function(id) { return remove(ref(db, "recipes/" + user.uid + "/" + id)); };
 
       onValue(recipesRef, function(snap) {
         window._allRecipes = [];
@@ -350,8 +354,7 @@
     }
   });
 
-  window._saveToFirebase = function(data) { return push(recipesRef, data); };
-  window._deleteFromFirebase = function(id) { return remove(ref(db, "recipes/" + id)); };
+
 
   window._signUp = function(name, email, password) {
     return createUserWithEmailAndPassword(auth, email, password)
